@@ -43,10 +43,13 @@ function App() {
   const [showDeleteRunConfirm, setShowDeleteRunConfirm] = useState<number | null>(null);
 
   useEffect(() => {
+    console.log('App useEffect - isLoading:', isLoading, 'isAuthenticated:', isAuthenticated, 'user:', user);
     if (isLoading) return;
     if (!isAuthenticated) {
       console.log('Not authenticated, redirecting to Auth0 login...');
-      loginWithRedirect();
+      loginWithRedirect({
+        appState: { returnTo: window.location.pathname },
+      });
     }
   }, [isLoading, isAuthenticated, loginWithRedirect]);
 
