@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
+import { db } from './firebase';
+import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import './App.css';
 
 interface Track {
@@ -26,7 +28,7 @@ interface Session {
 }
 
 function App() {
-  const { user, isAuthenticated, isLoading, loginWithRedirect, logout } = useAuth0();
+  const { user, isAuthenticated, isLoading, loginWithRedirect, logout, getIdTokenClaims } = useAuth0();
   const [tracks, setTracks] = useState<Track[]>([]);
   const [trackSearch, setTrackSearch] = useState('');
   const [newTrackName, setNewTrackName] = useState('');
@@ -53,45 +55,103 @@ function App() {
 
   useEffect(() => {
     if (!isAuthenticated || !user?.sub) return;
-    // Simulate initial tracks data (replace Firestore)
-    setTracks([
-      { id: '1', name: 'Track 1' },
-      { id: '2', name: 'Track 2' },
-    ]);
+
+    const fetchTracks = async () => {
+      try {
+        const idTokenClaims = await getIdTokenClaims();
+        const idToken = idTokenClaims?.__raw; // Auth0 ID token
+        console.log('Auth0 ID Token:', idToken);
+
+        // Firestore doesn’t natively support Auth0 tokens in client SDK—we’ll use REST API or proxy later
+        // For now, assume token is passed (simplified for testing)
+        const tracksRef = collection(db, `users/${user.sub}/tracks`);
+        const unsubscribe = onSnapshot(tracksRef, (snapshot) => {
+          const trackData = snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          })) as Track[];
+          setTracks(trackData);
+          console.log('Tracks fetched:', trackData);
+        }, (error) => {
+          console.error('Firestore snapshot error:', error);
+        });
+        return () => unsubscribe();
+      } catch (error) {
+        console.error('Error fetching tracks:', error);
+      }
+    };
+
+    fetchTracks();
   }, [isAuthenticated, user]);
 
   useEffect(() => {
-    if (!isAuthenticated || !selectedTrack) {
+    if (!isAuthenticated || !user?.sub || !selectedTrack) {
       setSessions([]);
       setSelectedSession(null);
       return;
     }
-    // Simulate sessions data for selected track (replace Firestore)
-    setSessions([
-      { id: '1', date: new Date().toISOString(), name: 'Session 1', runs: [], weather: { temp: 20, condition: 'Sunny' } },
-      { id: '2', date: new Date().toISOString(), name: 'Session 2', runs: [], weather: { temp: 22, condition: 'Cloudy' } },
-    ]);
-  }, [isAuthenticated, selectedTrack]);
+
+    const fetchSessions = async () => {
+      try {
+        const sessionsRef = collection(db, `users/${user.sub}/tracks/${selectedTrack.id}/sessions`);
+        const unsubscribe = onSnapshot(sessionsRef, (snapshot) => {
+          const sessionData = snapshot.docs.map((doc) => {
+            const data = doc.data();
+            return {
+              id: doc.id,
+              date: data.date || new Date().toISOString(),
+              name: data.name,
+              runs: data.runs || [],
+              weather: data.weather || { temp: 0, condition: 'Unknown' },
+              notes: data.notes,
+            } as Session;
+          });
+          setSessions(sessionData);
+          console.log('Sessions fetched:', sessionData);
+          setSelectedSession((prev) => {
+            if (!prev) return null;
+            return sessionData.find((s) => s.id === prev.id) || null;
+          });
+        }, (error) => {
+          console.error('Firestore snapshot error:', error);
+        });
+        return () => unsubscribe();
+      } catch (error) {
+        console.error('Error fetching sessions:', error);
+      }
+    };
+
+    fetchSessions();
+  }, [isAuthenticated, user, selectedTrack]);
 
   const handleLogout = () => {
     console.log('Logging out...');
     logout({ logoutParams: { returnTo: window.location.origin } });
   };
 
-  const addTrack = () => {
+  const addTrack = async () => {
     if (!isAuthenticated || !user?.sub || !newTrackName) return;
-    const newTrack = { id: Date.now().toString(), name: newTrackName };
-    setTracks([...tracks, newTrack]);
-    setNewTrackName('');
-    console.log('Track added:', newTrack);
+    try {
+      const track = { name: newTrackName };
+      await addDoc(collection(db, `users/${user.sub}/tracks`), track);
+      setNewTrackName('');
+      console.log('Track added:', newTrackName);
+    } catch (error) {
+      console.error('Error adding track:', error);
+    }
   };
 
-  const deleteTrack = (trackId: string) => {
+  const deleteTrack = async (trackId: string) => {
     if (!isAuthenticated || !user?.sub) return;
-    setTracks(tracks.filter((track) => track.id !== trackId));
-    setShowDeleteTrackConfirm(null);
-    if (selectedTrack?.id === trackId) setSelectedTrack(null);
-    console.log('Track deleted:', trackId);
+    try {
+      const trackRef = doc(db, `users/${user.sub}/tracks`, trackId);
+      await deleteDoc(trackRef);
+      setShowDeleteTrackConfirm(null);
+      if (selectedTrack?.id === trackId) setSelectedTrack(null);
+      console.log('Track deleted:', trackId);
+    } catch (error) {
+      console.error('Error deleting track:', error);
+    }
   };
 
   const fetchWeather = async (): Promise<{ temp: number; condition: string }> => {
@@ -122,28 +182,36 @@ function App() {
     console.log('Creating session with name:', sessionName);
     try {
       const weather = await fetchWeather();
-      const newSession: Session = {
-        id: Date.now().toString(),
+      const session: Partial<Session> = {
         date: new Date().toISOString(),
-        name: sessionName || undefined,
         runs: [],
         weather,
       };
-      setSessions([...sessions, newSession]);
+      if (sessionName) session.name = sessionName;
+      console.log('Session object:', session);
+      const docRef = await addDoc(
+        collection(db, `users/${user.sub}/tracks/${selectedTrack.id}/sessions`),
+        session
+      );
+      console.log('Session created with ID:', docRef.id);
       setSessionName('');
-      console.log('Session created:', newSession);
     } catch (error) {
       console.error('Error creating session:', error);
       alert('Failed to create session. Check console for details.');
     }
   };
 
-  const deleteSession = (sessionId: string) => {
+  const deleteSession = async (sessionId: string) => {
     if (!isAuthenticated || !user?.sub || !selectedTrack) return;
-    setSessions(sessions.filter((session) => session.id !== sessionId));
-    setShowDeleteSessionConfirm(null);
-    if (selectedSession?.id === sessionId) setIsModalOpen(false);
-    console.log('Session deleted:', sessionId);
+    try {
+      const sessionRef = doc(db, `users/${user.sub}/tracks/${selectedTrack.id}/sessions`, sessionId);
+      await deleteDoc(sessionRef);
+      setShowDeleteSessionConfirm(null);
+      if (selectedSession?.id === sessionId) setIsModalOpen(false);
+      console.log('Session deleted:', sessionId);
+    } catch (error) {
+      console.error('Error deleting session:', error);
+    }
   };
 
   const openModal = (session: Session) => {
@@ -152,35 +220,39 @@ function App() {
     setIsModalOpen(true);
   };
 
-  const addRun = () => {
+  const addRun = async () => {
     if (!isAuthenticated || !user?.sub || !selectedSession || !selectedTrack) return;
     console.log('Adding run to session:', selectedSession.id, 'with data:', runData);
-    const newRun: Run = {
-      bestLap: parseFloat(runData.bestLap) || 0,
-      avgLap: parseFloat(runData.avgLap) || 0,
-      fiveMinuteStint: runData.fiveMinuteStint || undefined,
-      notes: runData.notes || undefined,
-      setup: runData.tires ? { tires: runData.tires, favorite: runData.favorite } : undefined,
-    };
-    const updatedSessions = sessions.map((session) =>
-      session.id === selectedSession.id ? { ...session, runs: [...session.runs, newRun] } : session
-    );
-    setSessions(updatedSessions);
-    setSelectedSession({ ...selectedSession, runs: [...selectedSession.runs, newRun] });
-    setRunData({ bestLap: '', avgLap: '', fiveMinuteStint: '', tires: '', favorite: false, notes: '' });
-    console.log('Run added:', newRun);
+    try {
+      const newRun: Run = {
+        bestLap: parseFloat(runData.bestLap) || 0,
+        avgLap: parseFloat(runData.avgLap) || 0,
+        fiveMinuteStint: runData.fiveMinuteStint || undefined,
+        notes: runData.notes || undefined,
+        setup: runData.tires ? { tires: runData.tires, favorite: runData.favorite } : undefined,
+      };
+      const sessionRef = doc(db, `users/${user.sub}/tracks/${selectedTrack.id}/sessions`, selectedSession.id);
+      const updatedRuns = [...selectedSession.runs, newRun];
+      await updateDoc(sessionRef, { runs: updatedRuns });
+      console.log('Run added successfully to session:', selectedSession.id);
+      setRunData({ bestLap: '', avgLap: '', fiveMinuteStint: '', tires: '', favorite: false, notes: '' });
+    } catch (error) {
+      console.error('Error adding run:', error);
+      alert('Failed to add run. Check console for details.');
+    }
   };
 
-  const deleteRun = (runIndex: number) => {
+  const deleteRun = async (runIndex: number) => {
     if (!isAuthenticated || !user?.sub || !selectedSession || !selectedTrack) return;
-    const updatedRuns = selectedSession.runs.filter((_, index) => index !== runIndex);
-    const updatedSessions = sessions.map((session) =>
-      session.id === selectedSession.id ? { ...session, runs: updatedRuns } : session
-    );
-    setSessions(updatedSessions);
-    setSelectedSession({ ...selectedSession, runs: updatedRuns });
-    setShowDeleteRunConfirm(null);
-    console.log('Run deleted at index:', runIndex);
+    try {
+      const updatedRuns = selectedSession.runs.filter((_, index) => index !== runIndex);
+      const sessionRef = doc(db, `users/${user.sub}/tracks/${selectedTrack.id}/sessions`, selectedSession.id);
+      await updateDoc(sessionRef, { runs: updatedRuns });
+      setShowDeleteRunConfirm(null);
+      console.log('Run deleted at index:', runIndex);
+    } catch (error) {
+      console.error('Error deleting run:', error);
+    }
   };
 
   const filteredTracks = tracks.filter((track) =>
@@ -193,7 +265,7 @@ function App() {
   }
 
   if (!isAuthenticated) {
-    console.log('Showing redirecting message (should not persist)...');
+    console.log('Showing redirecting message...');
     return <div className="min-h-screen bg-dark-navy flex items-center justify-center text-gray-blue">Redirecting to login...</div>;
   }
 
