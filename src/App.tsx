@@ -1,8 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
-import { db } from './firebase';
-import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { initializeApp } from 'firebase/app';
+import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import './App.css';
+
+// Firebase configuration (replace with your values)
+const firebaseConfig = {
+  apiKey: "your-api-key",
+  authDomain: "your-auth-domain",
+  projectId: "your-project-id",
+  storageBucket: "your-storage-bucket",
+  messagingSenderId: "your-sender-id",
+  appId: "your-app-id"
+};
+
+// Initialize Firebase with Firestore only (no Auth)
+const app = initializeApp(firebaseConfig);
+export const db = getFirestore(app);
 
 interface Track {
   id: string;
@@ -46,8 +60,10 @@ function App() {
     console.log('App - isLoading:', isLoading, 'isAuthenticated:', isAuthenticated, 'user:', user);
     if (isLoading) return;
     if (!isAuthenticated) {
-      console.log('Not authenticated, initiating Auth0 login...');
-      loginWithRedirect();
+      console.log('Not authenticated, redirecting to Auth0 login...');
+      loginWithRedirect({
+        appState: { returnTo: window.location.pathname },
+      });
     }
   }, [isLoading, isAuthenticated, loginWithRedirect]);
 
@@ -64,7 +80,7 @@ function App() {
         setTracks(trackData);
         console.log('Tracks fetched:', trackData);
       }, (error) => {
-        console.error('Firestore error:', error);
+        console.error('Firestore snapshot error:', error);
       });
       return () => unsubscribe();
     };
@@ -100,7 +116,7 @@ function App() {
           return sessionData.find((s) => s.id === prev.id) || null;
         });
       }, (error) => {
-        console.error('Firestore error:', error);
+        console.error('Firestore snapshot error:', error);
       });
       return () => unsubscribe();
     };
@@ -249,7 +265,7 @@ function App() {
   }
 
   if (!isAuthenticated) {
-    console.log('Showing redirecting message...');
+    console.log('Redirecting to login...');
     return <div className="min-h-screen bg-dark-navy flex items-center justify-center text-gray-blue">Redirecting to login...</div>;
   }
 
