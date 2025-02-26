@@ -28,7 +28,7 @@ interface Session {
 }
 
 function App() {
-  const { user, isAuthenticated, isLoading, loginWithRedirect, logout, getIdTokenClaims } = useAuth0();
+  const { user, isAuthenticated, isLoading, loginWithRedirect, logout } = useAuth0();
   const [tracks, setTracks] = useState<Track[]>([]);
   const [trackSearch, setTrackSearch] = useState('');
   const [newTrackName, setNewTrackName] = useState('');
@@ -43,42 +43,30 @@ function App() {
   const [showDeleteRunConfirm, setShowDeleteRunConfirm] = useState<number | null>(null);
 
   useEffect(() => {
-    console.log('App useEffect - isLoading:', isLoading, 'isAuthenticated:', isAuthenticated, 'user:', user);
+    console.log('App - isLoading:', isLoading, 'isAuthenticated:', isAuthenticated, 'user:', user);
     if (isLoading) return;
     if (!isAuthenticated) {
-      console.log('Not authenticated, redirecting to Auth0 login...');
-      loginWithRedirect({
-        appState: { returnTo: window.location.pathname },
-      });
+      console.log('Not authenticated, initiating Auth0 login...');
+      loginWithRedirect();
     }
   }, [isLoading, isAuthenticated, loginWithRedirect]);
 
   useEffect(() => {
     if (!isAuthenticated || !user?.sub) return;
 
-    const fetchTracks = async () => {
-      try {
-        const idTokenClaims = await getIdTokenClaims();
-        const idToken = idTokenClaims?.__raw; // Auth0 ID token
-        console.log('Auth0 ID Token:', idToken);
-
-        // Firestore doesn’t natively support Auth0 tokens in client SDK—we’ll use REST API or proxy later
-        // For now, assume token is passed (simplified for testing)
-        const tracksRef = collection(db, `users/${user.sub}/tracks`);
-        const unsubscribe = onSnapshot(tracksRef, (snapshot) => {
-          const trackData = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          })) as Track[];
-          setTracks(trackData);
-          console.log('Tracks fetched:', trackData);
-        }, (error) => {
-          console.error('Firestore snapshot error:', error);
-        });
-        return () => unsubscribe();
-      } catch (error) {
-        console.error('Error fetching tracks:', error);
-      }
+    const fetchTracks = () => {
+      const tracksRef = collection(db, `users/${user.sub}/tracks`);
+      const unsubscribe = onSnapshot(tracksRef, (snapshot) => {
+        const trackData = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as Track[];
+        setTracks(trackData);
+        console.log('Tracks fetched:', trackData);
+      }, (error) => {
+        console.error('Firestore error:', error);
+      });
+      return () => unsubscribe();
     };
 
     fetchTracks();
@@ -91,34 +79,30 @@ function App() {
       return;
     }
 
-    const fetchSessions = async () => {
-      try {
-        const sessionsRef = collection(db, `users/${user.sub}/tracks/${selectedTrack.id}/sessions`);
-        const unsubscribe = onSnapshot(sessionsRef, (snapshot) => {
-          const sessionData = snapshot.docs.map((doc) => {
-            const data = doc.data();
-            return {
-              id: doc.id,
-              date: data.date || new Date().toISOString(),
-              name: data.name,
-              runs: data.runs || [],
-              weather: data.weather || { temp: 0, condition: 'Unknown' },
-              notes: data.notes,
-            } as Session;
-          });
-          setSessions(sessionData);
-          console.log('Sessions fetched:', sessionData);
-          setSelectedSession((prev) => {
-            if (!prev) return null;
-            return sessionData.find((s) => s.id === prev.id) || null;
-          });
-        }, (error) => {
-          console.error('Firestore snapshot error:', error);
+    const fetchSessions = () => {
+      const sessionsRef = collection(db, `users/${user.sub}/tracks/${selectedTrack.id}/sessions`);
+      const unsubscribe = onSnapshot(sessionsRef, (snapshot) => {
+        const sessionData = snapshot.docs.map((doc) => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            date: data.date || new Date().toISOString(),
+            name: data.name,
+            runs: data.runs || [],
+            weather: data.weather || { temp: 0, condition: 'Unknown' },
+            notes: data.notes,
+          } as Session;
         });
-        return () => unsubscribe();
-      } catch (error) {
-        console.error('Error fetching sessions:', error);
-      }
+        setSessions(sessionData);
+        console.log('Sessions fetched:', sessionData);
+        setSelectedSession((prev) => {
+          if (!prev) return null;
+          return sessionData.find((s) => s.id === prev.id) || null;
+        });
+      }, (error) => {
+        console.error('Firestore error:', error);
+      });
+      return () => unsubscribe();
     };
 
     fetchSessions();
