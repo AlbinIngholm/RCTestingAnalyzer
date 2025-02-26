@@ -1,0 +1,109 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom gradient variables */
+:root {
+  --dark-navy: #1a2639;
+  --deep-blue: #0d1b2a;
+}
+
+.app-container {
+  @apply min-h-screen text-white bg-gradient-to-b from-dark-navy to-deep-blue;
+}
+
+.header {
+  @apply p-6 shadow-lg flex justify-between items-center bg-deep-blue; /* Changed from slate-blue */
+}
+
+.header-title {
+  @apply text-3xl font-bold tracking-wide text-white;
+}
+
+.header-subtitle {
+  @apply text-sm text-gray-blue;
+}
+
+.auth-container {
+  @apply flex gap-2 items-center;
+}
+
+.main {
+  @apply p-6;
+}
+
+.sessions-grid {
+  @apply grid gap-6 md:grid-cols-2 lg:grid-cols-3;
+}
+
+.empty-text {
+  @apply text-gray-blue;
+}
+
+.session-card {
+  @apply p-4 rounded-lg shadow-md hover:shadow-xl transition-shadow duration-300 border-l-4 bg-dark-blue border-light-pink;
+}
+
+.session-title {
+  @apply text-xl font-semibold text-white;
+}
+
+.session-info {
+  @apply text-gray-blue;
+}
+
+.details-button {
+  @apply text-sm text-light-pink hover:text-bright-pink;
+}
+
+.card-actions {
+  @apply flex items-center justify-between mt-2; /* New class for alignment */
+}
+
+.favorite-text {
+  @apply text-light-pink text-sm; /* New class for Favorite styling */
+}
+
+.new-session-button {
+  @apply fixed bottom-6 right-6 px-6 py-3 rounded-full shadow-lg transition-transform duration-200 hover:scale-105 bg-light-pink hover:bg-bright-pink text-white;
+}
+
+.modal-overlay {
+  @apply fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center;
+}
+
+.modal-content {
+  @apply p-6 rounded-lg w-full max-w-md bg-dark-blue border border-light-pink/20;
+}
+
+.modal-title {
+  @apply text-2xl font-bold mb-4 text-white;
+}
+
+.modal-text {
+  @apply text-gray-blue;
+}
+
+.modal-input {
+  @apply w-full p-2 rounded bg-slate-blue text-white focus:ring-2 focus:ring-light-pink;
+}
+
+.modal-textarea {
+  @apply w-full p-2 rounded bg-slate-blue text-white focus:ring-2 focus:ring-light-pink;
+}
+
+.modal-checkbox-label {
+  @apply text-gray-blue;
+}
+
+.modal-button {
+  @apply px-4 py-2 rounded transition-colors duration-200;
+}
+
+.save-button {
+  @apply modal-button bg-light-pink hover:bg-bright-pink text-white;
+}
+
+.close-button {
+  @apply modal-button bg-deep-blue hover:bg-slate-blue text-white;
+}
