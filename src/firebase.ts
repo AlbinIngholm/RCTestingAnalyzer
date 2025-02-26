@@ -1,18 +1,19 @@
-/** @type {import('tailwindcss').Config} */
-module.exports = {
-    content: ["./src/**/*.{js,jsx,ts,tsx}"], // Scans all JS/TS files in src
-    theme: {
-      extend: {
-        colors: {
-          'dark-navy': '#1a2639',
-          'deep-blue': '#0d1b2a',
-          'slate-blue': '#2e4057',
-          'dark-blue': '#2b3a55',
-          'light-pink': '#ff99cc',
-          'bright-pink': '#ffaddb',
-          'gray-blue': '#a3bffa',
-        },
-      },
-    },
-    plugins: [],
+import { initializeApp } from 'firebase/app';
+import { getFirestore } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
+import { getAuth } from 'firebase/auth';
+
+const firebaseConfig = {
+    apiKey: "AIzaSyB692-OmitUl0AphL4wYHjANnsFDhwTtkE",
+    authDomain: "rctracker-ca4a0.firebaseapp.com",
+    projectId: "rctracker-ca4a0",
+    storageBucket: "rctracker-ca4a0.firebasestorage.app",
+    messagingSenderId: "499372521323",
+    appId: "1:499372521323:web:48f4dbc2ff06120ae13e2e",
+    measurementId: "G-SH9GHKWW9B"
   };
+
+const app = initializeApp(firebaseConfig);
+export const db = getFirestore(app);
+export const storage = getStorage(app);
+export const auth = getAuth(app);
