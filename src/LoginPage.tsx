@@ -1,40 +1,34 @@
 import React, { useState } from 'react';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from './firebase';
 
 interface LoginPageProps {
   onLogin: () => void;
+  onSwitchToSignUp: () => void;
 }
 
-const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
+const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onSwitchToSignUp }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isSignUp, setIsSignUp] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleAuth = async () => {
+  const handleLogin = async () => {
     setError(null);
     try {
-      if (isSignUp) {
-        await createUserWithEmailAndPassword(auth, email, password);
-      } else {
-        await signInWithEmailAndPassword(auth, email, password);
-      }
+      await signInWithEmailAndPassword(auth, email, password);
       setEmail('');
       setPassword('');
       onLogin();
     } catch (error: any) {
-      console.error(`${isSignUp ? 'Sign-up' : 'Login'} error:`, error);
-      setError(error.message || 'Authentication failed. Check your credentials.');
+      console.error('Login error:', error);
+      setError(error.message || 'Login failed. Check your credentials.');
     }
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-dark-navy to-deep-blue flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-dark-blue/90 rounded-lg p-6 shadow-lg">
-        <h1 className="text-2xl font-bold text-white text-center mb-6">
-          {isSignUp ? 'Sign Up for RC Testing Analyzer' : 'Log In to RC Testing Analyzer'}
-        </h1>
+      <div className="w-full max-w-sm bg-dark-blue rounded-lg p-6 shadow-lg">
+        <h1 className="text-2xl font-bold text-white text-center mb-6">Log In</h1>
         <div className="space-y-4">
           <div>
             <label className="block text-gray-blue text-sm mb-1">Email</label>
@@ -43,7 +37,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Enter your email"
-              className="w-full p-3 rounded bg-dark-blue text-white border border-light-pink/20 focus:ring-2 focus:ring-light-pink outline-none"
+              className="w-full p-3 rounded bg-deep-blue text-white border border-light-pink/20 focus:ring-2 focus:ring-light-pink outline-none"
             />
           </div>
           <div>
@@ -53,21 +47,21 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter your password"
-              className="w-full p-3 rounded bg-dark-blue text-white border border-light-pink/20 focus:ring-2 focus:ring-light-pink outline-none"
+              className="w-full p-3 rounded bg-deep-blue text-white border border-light-pink/20 focus:ring-2 focus:ring-light-pink outline-none"
             />
           </div>
           {error && <p className="text-red-400 text-sm text-center">{error}</p>}
           <button
-            onClick={handleAuth}
-            className="w-full bg-light-pink hover:bg-bright-pink text-dark-blue font-semibold py-3 px-4 rounded transition-colors"
+            onClick={handleLogin}
+            className="w-full bg-light-pink hover:bg-bright-pink text-dark-blue font-semibold py-3 rounded transition-colors"
           >
-            {isSignUp ? 'Sign Up' : 'Log In'}
+            Log In
           </button>
           <button
-            onClick={() => setIsSignUp(!isSignUp)}
+            onClick={onSwitchToSignUp}
             className="w-full text-light-pink hover:text-bright-pink text-sm"
           >
-            {isSignUp ? 'Already have an account? Log In' : 'Need an account? Sign Up'}
+            Need an account? Sign Up
           </button>
         </div>
       </div>
