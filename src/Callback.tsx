@@ -13,9 +13,9 @@ const CallbackPage: React.FC = () => {
         console.error('Callback error:', error);
       } else if (isAuthenticated) {
         console.log('Callback successful, navigating to root...');
-        navigate('/'); // Redirect to root after successful auth
+        navigate('/');
       } else {
-        console.log('Callback: Not authenticated, unexpected state');
+        console.log('Callback: Not authenticated after redirect, unexpected state');
       }
     }
   }, [isLoading, error, isAuthenticated, navigate]);
