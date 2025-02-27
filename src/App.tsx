@@ -612,7 +612,7 @@ function App() {
                   <h3 className="text-lg font-semibold mb-2">New Run</h3>
                   <div className="space-y-3">
                     <div>
-                      <label className="block text-gray-blue text-sm mb-1">Best Lap (s)</label>
+                      <label className="block text-gray-blue text-sm mb-1">Best Lap</label>
                       <input
                         type="number"
                         value={runData.bestLap}
