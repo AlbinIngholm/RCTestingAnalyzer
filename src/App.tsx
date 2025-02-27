@@ -57,15 +57,14 @@ function App() {
   const [showDeleteTrackConfirm, setShowDeleteTrackConfirm] = useState<string | null>(null);
   const [showDeleteSessionConfirm, setShowDeleteSessionConfirm] = useState<string | null>(null);
   const [showDeleteRunConfirm, setShowDeleteRunConfirm] = useState<number | null>(null);
-  const [showTutorial, setShowTutorial] = useState(false); // Tutorial state
+  const [showTutorial, setShowTutorial] = useState(false);
 
-  // Check auth state and show tutorial on every login
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       if (currentUser) {
         setUser(currentUser);
         console.log('User authenticated:', currentUser.email);
-        setShowTutorial(true); // Show tutorial on every login
+        setShowTutorial(true);
       } else {
         setUser(null);
         console.log('No user authenticated, redirecting to login...');
@@ -159,24 +158,65 @@ function App() {
 
   const fetchWeather = async (): Promise<{ temp: number; condition: string }> => {
     try {
-      const position = await new Promise<GeolocationPosition>((resolve, reject) =>
-        navigator.geolocation.getCurrentPosition(resolve, reject)
-      );
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(
+          resolve,
+          (error) => {
+            console.error('Geolocation error:', {
+              code: error.code,
+              message: error.message,
+            });
+            reject(error);
+          },
+          {
+            enableHighAccuracy: true,
+            timeout: 15000, // Increased timeout to 15 seconds
+            maximumAge: 0,
+          }
+        );
+      });
       const { latitude, longitude } = position.coords;
+      console.log(`Geolocation fetched: lat=${latitude}, lon=${longitude}`);
+
       const response = await fetch(
         `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${latitude}&lon=${longitude}`,
         { headers: { 'User-Agent': 'RC-Testing-Analyzer/1.0 (your-email@example.com)' } }
       );
-      if (!response.ok) throw new Error('Weather API request failed');
+      if (!response.ok) {
+        throw new Error(`Weather API failed with status: ${response.status}`);
+      }
       const data = await response.json();
+      console.log('Weather API response:', data);
+
       const current = data.properties.timeseries[0].data.instant.details;
-      const temp = current.air_temperature;
+      const temp = current.air_temperature; // In Celsius
       const conditionSymbol = data.properties.timeseries[0].data.next_1_hours?.summary.symbol_code || 'unknown';
       const condition = conditionSymbol.split('_')[0];
       return { temp, condition };
     } catch (error) {
-      console.error('Error fetching weather:', error);
-      return { temp: 0, condition: 'Unknown' };
+      console.error('Weather fetch failed:', error);
+      // Fallback to default coordinates (e.g., Stockholm, Sweden)
+      const fallbackLat = 59.9245;
+      const fallbackLon = 10.9540;
+      console.log(`Using fallback coordinates: lat=${fallbackLat}, lon=${fallbackLon} (Lørenskog)`);
+      try {
+        const response = await fetch(
+          `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${fallbackLat}&lon=${fallbackLon}`,
+          { headers: { 'User-Agent': 'RC-Testing-Analyzer/1.0 (your-email@example.com)' } }
+        );
+        if (!response.ok) {
+          throw new Error(`Fallback Weather API failed with status: ${response.status}`);
+        }
+        const data = await response.json();
+        const current = data.properties.timeseries[0].data.instant.details;
+        const temp = current.air_temperature; // In Celsius
+        const conditionSymbol = data.properties.timeseries[0].data.next_1_hours?.summary.symbol_code || 'unknown';
+        const condition = conditionSymbol.split('_')[0];
+        return { temp, condition };
+      } catch (fallbackError) {
+        console.error('Fallback weather fetch failed:', fallbackError);
+        return { temp: 0, condition: 'Unknown' };
+      }
     }
   };
 
@@ -185,6 +225,7 @@ function App() {
     console.log('Creating session with name:', sessionName);
     try {
       const weather = await fetchWeather();
+      console.log('Weather data fetched:', weather);
       const session: Partial<Session> = {
         date: new Date().toISOString(),
         runs: [],
@@ -375,7 +416,7 @@ function App() {
                   <div key={session.id} className="p-4 rounded-lg bg-dark-blue/80 shadow-md hover:shadow-lg transition-shadow">
                     <h2 className="text-lg font-semibold truncate">{session.name || new Date(session.date).toLocaleDateString()}</h2>
                     <p className="text-sm text-gray-blue">Runs: {session.runs.length}</p>
-                    <p className="text-sm text-gray-blue">Weather: {session.weather.condition}, {session.weather.temp}°F</p>
+                    <p className="text-sm text-gray-blue">Weather: {session.weather.condition}, {session.weather.temp}°C</p>
                     <div className="flex justify-between items-center mt-2">
                       <span className="text-gray-blue text-sm">
                         {session.runs.filter((run) => run.setup?.favorite).length} Favorite(s)
