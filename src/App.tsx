@@ -1,23 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { getAuth, onAuthStateChanged, signOut } from 'firebase/auth';
+import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { useNavigate } from 'react-router-dom';
+import { db, auth } from './firebase';
 import './App.css';
-
-// Firebase configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyB692-OmitUl0AphL4wYHjANnsFDhwTtkE",
-  authDomain: "rctracker-ca4a0.firebaseapp.com",
-  projectId: "rctracker-ca4a0",
-  storageBucket: "rctracker-ca4a0.firebasestorage.app",
-  messagingSenderId: "499372521323",
-  appId: "1:499372521323:web:48f4dbc2ff06120ae13e2e",
-  measurementId: "G-SH9GHKWW9B",
-};
-const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
-const auth = getAuth(app);
 
 interface Track {
   id: string;
@@ -58,6 +44,7 @@ function App() {
   const [showDeleteSessionConfirm, setShowDeleteSessionConfirm] = useState<string | null>(null);
   const [showDeleteRunConfirm, setShowDeleteRunConfirm] = useState<number | null>(null);
   const [showTutorial, setShowTutorial] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -158,13 +145,41 @@ function App() {
 
   const fetchWeather = async (): Promise<{ temp: number; condition: string }> => {
     try {
+      // Check if geolocation is supported
+      if (!navigator.geolocation) {
+        throw new Error('Geolocation is not supported by this browser.');
+      }
+
       const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true,
-          timeout: 15000,
-          maximumAge: 0,
-        });
+        navigator.geolocation.getCurrentPosition(
+          resolve,
+          (error) => {
+            console.error('Geolocation error:', {
+              code: error.code,
+              message: error.message,
+            });
+            let errorMessage = 'Unable to fetch location.';
+            switch (error.code) {
+              case error.PERMISSION_DENIED:
+                errorMessage = 'Location permission denied. Please enable it in Settings > Safari > Location.';
+                break;
+              case error.POSITION_UNAVAILABLE:
+                errorMessage = 'Location information is unavailable.';
+                break;
+              case error.TIMEOUT:
+                errorMessage = 'Location request timed out.';
+                break;
+            }
+            reject(new Error(errorMessage));
+          },
+          {
+            enableHighAccuracy: true, // Try high accuracy, but it’s optional
+            timeout: 20000, // Increased to 20 seconds for slower devices
+            maximumAge: 0, // Ensure fresh data
+          }
+        );
       });
+
       const { latitude, longitude } = position.coords;
       console.log(`Geolocation fetched: lat=${latitude}, lon=${longitude}`);
 
@@ -172,8 +187,12 @@ function App() {
         `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${latitude}&lon=${longitude}`,
         { headers: { 'User-Agent': 'RC-Testing-Analyzer/1.0 (your-email@example.com)' } }
       );
-      if (!response.ok) throw new Error(`Weather API failed with status: ${response.status}`);
+      if (!response.ok) {
+        throw new Error(`Weather API failed with status: ${response.status}`);
+      }
       const data = await response.json();
+      console.log('Weather API response:', data);
+
       const current = data.properties.timeseries[0].data.instant.details;
       const temp = current.air_temperature;
       const conditionSymbol = data.properties.timeseries[0].data.next_1_hours?.summary.symbol_code || 'unknown';
@@ -181,15 +200,19 @@ function App() {
       return { temp, condition };
     } catch (error) {
       console.error('Weather fetch failed:', error);
+      setLocationError(error instanceof Error ? error.message : 'Unknown error fetching location.');
+      // Fallback to default coordinates (Lørenskog, Norway)
       const fallbackLat = 59.9245;
       const fallbackLon = 10.9540;
-      console.log(`Using fallback coordinates: lat=${fallbackLat}, lon=${fallbackLon} (Lørenskog)`);
+      console.log(`Using fallback coordinates: lat=${fallbackLat}, lon=${fallbackLon}`);
       try {
         const response = await fetch(
           `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${fallbackLat}&lon=${fallbackLon}`,
           { headers: { 'User-Agent': 'RC-Testing-Analyzer/1.0 (your-email@example.com)' } }
         );
-        if (!response.ok) throw new Error(`Fallback Weather API failed with status: ${response.status}`);
+        if (!response.ok) {
+          throw new Error(`Fallback Weather API failed with status: ${response.status}`);
+        }
         const data = await response.json();
         const current = data.properties.timeseries[0].data.instant.details;
         const temp = current.air_temperature;
@@ -207,13 +230,16 @@ function App() {
     if (!user || !selectedTrack) return;
     console.log('Creating session with name:', sessionName);
     try {
+      setLocationError(null); // Reset any previous error
       const weather = await fetchWeather();
+      console.log('Weather data fetched:', weather);
       const session: Partial<Session> = {
         date: new Date().toISOString(),
         runs: [],
         weather,
       };
       if (sessionName) session.name = sessionName;
+      console.log('Session object:', session);
       const docRef = await addDoc(
         collection(db, `users/${user.uid}/tracks/${selectedTrack.id}/sessions`),
         session
@@ -392,6 +418,9 @@ function App() {
                 + New Session
               </button>
             </div>
+            {locationError && (
+              <p className="text-red-400 text-sm mb-4">{locationError}</p>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {sessions.length === 0 ? (
                 <p className="text-gray-blue col-span-full text-center">No sessions yet. Add one to start!</p>
