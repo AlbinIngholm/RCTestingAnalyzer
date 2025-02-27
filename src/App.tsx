@@ -44,7 +44,8 @@ function App() {
   const [showDeleteSessionConfirm, setShowDeleteSessionConfirm] = useState<string | null>(null);
   const [showDeleteRunConfirm, setShowDeleteRunConfirm] = useState<number | null>(null);
   const [showTutorial, setShowTutorial] = useState(false);
-  const [locationError, setLocationError] = useState<string | null>(null);
+  const [locationStatus, setLocationStatus] = useState<string>('');
+  const [showRetryLocation, setShowRetryLocation] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -144,24 +145,31 @@ function App() {
   };
 
   const fetchWeather = async (): Promise<{ temp: number; condition: string }> => {
+    setLocationStatus('Requesting location...');
+    console.log('fetchWeather: Starting geolocation request at', new Date().toISOString());
+
     try {
-      // Check if geolocation is supported
       if (!navigator.geolocation) {
         throw new Error('Geolocation is not supported by this browser.');
       }
 
       const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(
-          resolve,
+        console.log('fetchWeather: Calling getCurrentPosition');
+        const geoRequest = navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            console.log('fetchWeather: Geolocation success:', pos);
+            resolve(pos);
+          },
           (error) => {
-            console.error('Geolocation error:', {
+            console.error('fetchWeather: Geolocation error:', {
               code: error.code,
               message: error.message,
+              timestamp: new Date().toISOString(),
             });
             let errorMessage = 'Unable to fetch location.';
             switch (error.code) {
               case error.PERMISSION_DENIED:
-                errorMessage = 'Location permission denied. Please enable it in Settings > Safari > Location.';
+                errorMessage = 'Location permission denied. Please allow location access for testinganalyzer.netlify.app in Safari settings.';
                 break;
               case error.POSITION_UNAVAILABLE:
                 errorMessage = 'Location information is unavailable.';
@@ -173,38 +181,43 @@ function App() {
             reject(new Error(errorMessage));
           },
           {
-            enableHighAccuracy: true, // Try high accuracy, but it’s optional
-            timeout: 20000, // Increased to 20 seconds for slower devices
-            maximumAge: 0, // Ensure fresh data
+            enableHighAccuracy: false, // Relaxed for broader compatibility
+            timeout: 30000, // 30 seconds timeout
+            maximumAge: 0, // Fresh data only
           }
         );
+        console.log('fetchWeather: Geolocation request initiated:', geoRequest);
       });
 
       const { latitude, longitude } = position.coords;
-      console.log(`Geolocation fetched: lat=${latitude}, lon=${longitude}`);
+      console.log(`fetchWeather: Geolocation fetched: lat=${latitude}, lon=${longitude}`);
+      setLocationStatus(`Location fetched: ${latitude}, ${longitude}`);
 
+      console.log('fetchWeather: Fetching weather data from api.met.no');
       const response = await fetch(
         `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${latitude}&lon=${longitude}`,
         { headers: { 'User-Agent': 'RC-Testing-Analyzer/1.0 (your-email@example.com)' } }
       );
       if (!response.ok) {
+        console.error('fetchWeather: Weather API failed:', response.status, response.statusText);
         throw new Error(`Weather API failed with status: ${response.status}`);
       }
       const data = await response.json();
-      console.log('Weather API response:', data);
+      console.log('fetchWeather: Weather API response:', data);
 
       const current = data.properties.timeseries[0].data.instant.details;
       const temp = current.air_temperature;
       const conditionSymbol = data.properties.timeseries[0].data.next_1_hours?.summary.symbol_code || 'unknown';
       const condition = conditionSymbol.split('_')[0];
+      setLocationStatus('Weather data retrieved successfully');
       return { temp, condition };
     } catch (error) {
-      console.error('Weather fetch failed:', error);
-      setLocationError(error instanceof Error ? error.message : 'Unknown error fetching location.');
-      // Fallback to default coordinates (Lørenskog, Norway)
+      console.error('fetchWeather: Failed:', error);
+      setLocationStatus(error instanceof Error ? error.message : 'Unknown error fetching location.');
+      setShowRetryLocation(true); // Show retry option
       const fallbackLat = 59.9245;
       const fallbackLon = 10.9540;
-      console.log(`Using fallback coordinates: lat=${fallbackLat}, lon=${fallbackLon}`);
+      console.log(`fetchWeather: Using fallback coordinates: lat=${fallbackLat}, lon=${fallbackLon}`);
       try {
         const response = await fetch(
           `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${fallbackLat}&lon=${fallbackLon}`,
@@ -218,9 +231,11 @@ function App() {
         const temp = current.air_temperature;
         const conditionSymbol = data.properties.timeseries[0].data.next_1_hours?.summary.symbol_code || 'unknown';
         const condition = conditionSymbol.split('_')[0];
+        setLocationStatus('Using fallback weather data (Lørenskog)');
         return { temp, condition };
       } catch (fallbackError) {
-        console.error('Fallback weather fetch failed:', fallbackError);
+        console.error('fetchWeather: Fallback failed:', fallbackError);
+        setLocationStatus('Failed to retrieve weather data');
         return { temp: 0, condition: 'Unknown' };
       }
     }
@@ -228,28 +243,37 @@ function App() {
 
   const createSession = async () => {
     if (!user || !selectedTrack) return;
-    console.log('Creating session with name:', sessionName);
+    console.log('createSession: Starting with name:', sessionName);
     try {
-      setLocationError(null); // Reset any previous error
+      setLocationStatus('');
+      setShowRetryLocation(false);
       const weather = await fetchWeather();
-      console.log('Weather data fetched:', weather);
+      console.log('createSession: Weather data:', weather);
       const session: Partial<Session> = {
         date: new Date().toISOString(),
         runs: [],
         weather,
       };
       if (sessionName) session.name = sessionName;
-      console.log('Session object:', session);
+      console.log('createSession: Session object:', session);
       const docRef = await addDoc(
         collection(db, `users/${user.uid}/tracks/${selectedTrack.id}/sessions`),
         session
       );
-      console.log('Session created with ID:', docRef.id);
+      console.log('createSession: Session created with ID:', docRef.id);
       setSessionName('');
+      setLocationStatus('Session created successfully');
     } catch (error) {
-      console.error('Error creating session:', error);
+      console.error('createSession: Error:', error);
+      setLocationStatus('Failed to create session');
       alert('Failed to create session. Check console for details.');
     }
+  };
+
+  const retryLocation = async () => {
+    console.log('retryLocation: Attempting to retry geolocation');
+    setShowRetryLocation(false);
+    await createSession(); // Retry the whole process
   };
 
   const deleteSession = async (sessionId: string) => {
@@ -418,8 +442,18 @@ function App() {
                 + New Session
               </button>
             </div>
-            {locationError && (
-              <p className="text-red-400 text-sm mb-4">{locationError}</p>
+            {locationStatus && (
+              <p className={`text-sm mb-4 ${locationStatus.includes('failed') || locationStatus.includes('denied') ? 'text-red-400' : 'text-gray-blue'}`}>
+                {locationStatus}
+                {showRetryLocation && (
+                  <button
+                    onClick={retryLocation}
+                    className="ml-2 text-light-pink hover:text-bright-pink underline"
+                  >
+                    Retry
+                  </button>
+                )}
+              </p>
             )}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {sessions.length === 0 ? (
