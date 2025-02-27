@@ -159,21 +159,11 @@ function App() {
   const fetchWeather = async (): Promise<{ temp: number; condition: string }> => {
     try {
       const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(
-          resolve,
-          (error) => {
-            console.error('Geolocation error:', {
-              code: error.code,
-              message: error.message,
-            });
-            reject(error);
-          },
-          {
-            enableHighAccuracy: true,
-            timeout: 15000, // Increased timeout to 15 seconds
-            maximumAge: 0,
-          }
-        );
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 0,
+        });
       });
       const { latitude, longitude } = position.coords;
       console.log(`Geolocation fetched: lat=${latitude}, lon=${longitude}`);
@@ -182,20 +172,15 @@ function App() {
         `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${latitude}&lon=${longitude}`,
         { headers: { 'User-Agent': 'RC-Testing-Analyzer/1.0 (your-email@example.com)' } }
       );
-      if (!response.ok) {
-        throw new Error(`Weather API failed with status: ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`Weather API failed with status: ${response.status}`);
       const data = await response.json();
-      console.log('Weather API response:', data);
-
       const current = data.properties.timeseries[0].data.instant.details;
-      const temp = current.air_temperature; // In Celsius
+      const temp = current.air_temperature;
       const conditionSymbol = data.properties.timeseries[0].data.next_1_hours?.summary.symbol_code || 'unknown';
       const condition = conditionSymbol.split('_')[0];
       return { temp, condition };
     } catch (error) {
       console.error('Weather fetch failed:', error);
-      // Fallback to default coordinates (e.g., Stockholm, Sweden)
       const fallbackLat = 59.9245;
       const fallbackLon = 10.9540;
       console.log(`Using fallback coordinates: lat=${fallbackLat}, lon=${fallbackLon} (Lørenskog)`);
@@ -204,12 +189,10 @@ function App() {
           `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${fallbackLat}&lon=${fallbackLon}`,
           { headers: { 'User-Agent': 'RC-Testing-Analyzer/1.0 (your-email@example.com)' } }
         );
-        if (!response.ok) {
-          throw new Error(`Fallback Weather API failed with status: ${response.status}`);
-        }
+        if (!response.ok) throw new Error(`Fallback Weather API failed with status: ${response.status}`);
         const data = await response.json();
         const current = data.properties.timeseries[0].data.instant.details;
-        const temp = current.air_temperature; // In Celsius
+        const temp = current.air_temperature;
         const conditionSymbol = data.properties.timeseries[0].data.next_1_hours?.summary.symbol_code || 'unknown';
         const condition = conditionSymbol.split('_')[0];
         return { temp, condition };
@@ -225,14 +208,12 @@ function App() {
     console.log('Creating session with name:', sessionName);
     try {
       const weather = await fetchWeather();
-      console.log('Weather data fetched:', weather);
       const session: Partial<Session> = {
         date: new Date().toISOString(),
         runs: [],
         weather,
       };
       if (sessionName) session.name = sessionName;
-      console.log('Session object:', session);
       const docRef = await addDoc(
         collection(db, `users/${user.uid}/tracks/${selectedTrack.id}/sessions`),
         session
@@ -251,18 +232,19 @@ function App() {
       const sessionRef = doc(db, `users/${user.uid}/tracks/${selectedTrack.id}/sessions`, sessionId);
       await deleteDoc(sessionRef);
       setShowDeleteSessionConfirm(null);
-      if (selectedSession?.id === sessionId) setIsModalOpen(false);
+      if (selectedSession?.id === sessionId) setSelectedSession(null);
       console.log('Session deleted:', sessionId);
     } catch (error) {
       console.error('Error deleting session:', error);
     }
   };
 
-  const openModal = (session: Session) => {
-    setSelectedSession(session);
+  const openAddRunModal = () => {
+    if (!selectedSession) return;
     setRunData({ bestLap: '', avgLap: '', fiveMinuteStint: '', tires: '', favorite: false, notes: '' });
     setIsModalOpen(true);
   };
+
   const addRun = async () => {
     if (!user || !selectedSession || !selectedTrack) return;
     console.log('Adding run to session:', selectedSession.id, 'with data:', runData);
@@ -276,14 +258,12 @@ function App() {
       if (runData.tires) {
         newRun.setup = { tires: runData.tires, favorite: runData.favorite };
       }
-  
+
       const sessionRef = doc(db, `users/${user.uid}/tracks/${selectedTrack.id}/sessions`, selectedSession.id);
       const updatedRuns = [...selectedSession.runs, newRun];
       await updateDoc(sessionRef, { runs: updatedRuns });
       console.log('Run added successfully to session:', selectedSession.id);
-      // Reset form but keep modal open
       setRunData({ bestLap: '', avgLap: '', fiveMinuteStint: '', tires: '', favorite: false, notes: '' });
-      // Note: We don't close the modal or switch to view runs here
     } catch (error) {
       console.error('Error adding run:', error);
       alert('Failed to add run. Check console for details.');
@@ -425,9 +405,21 @@ function App() {
                       <span className="text-gray-blue text-sm">
                         {session.runs.filter((run) => run.setup?.favorite).length} Favorite(s)
                       </span>
-                      <div className="flex gap-2">
-                        <button onClick={() => openModal(session)} className="text-light-pink hover:text-bright-pink text-sm">
+                      <div className="flex gap-2 flex-wrap">
+                        <button
+                          onClick={() => setSelectedSession(session)}
+                          className="text-light-pink hover:text-bright-pink text-sm"
+                        >
                           View Runs
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSelectedSession(session);
+                            openAddRunModal();
+                          }}
+                          className="text-light-pink hover:text-bright-pink text-sm"
+                        >
+                          Add Run
                         </button>
                         {showDeleteSessionConfirm === session.id ? (
                           <div className="flex gap-2">
@@ -461,167 +453,174 @@ function App() {
           </>
         )}
 
-{isModalOpen && selectedSession && (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-dark-blue rounded-lg p-6 max-h-[90vh] overflow-y-auto">
-        <h2 className="text-xl font-bold mb-4">
-          Add Run to {selectedSession.name || new Date(selectedSession.date).toLocaleDateString()}
-        </h2>
-        <div className="space-y-4">
-          <div className="border-t border-light-pink/20 pt-4">
-            <h3 className="text-lg font-semibold mb-2">New Run</h3>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-gray-blue text-sm mb-1">Best Lap (s)</label>
-                <input
-                  type="number"
-                  value={runData.bestLap}
-                  onChange={(e) => setRunData({ ...runData, bestLap: e.target.value })}
-                  className="w-full p-3 rounded bg-dark-blue text-white border border-light-pink/20 focus:ring-2 focus:ring-light-pink outline-none"
-                />
+        {/* Add Run Modal */}
+        {isModalOpen && selectedSession && (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4">
+            <div className="w-full max-w-md bg-dark-blue rounded-lg p-6 max-h-[90vh] overflow-y-auto">
+              <h2 className="text-xl font-bold mb-4">
+                Add Run to {selectedSession.name || new Date(selectedSession.date).toLocaleDateString()}
+              </h2>
+              <div className="space-y-4">
+                <div className="border-t border-light-pink/20 pt-4">
+                  <h3 className="text-lg font-semibold mb-2">New Run</h3>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-gray-blue text-sm mb-1">Best Lap (s)</label>
+                      <input
+                        type="number"
+                        value={runData.bestLap}
+                        onChange={(e) => setRunData({ ...runData, bestLap: e.target.value })}
+                        className="w-full p-3 rounded bg-dark-blue text-white border border-light-pink/20 focus:ring-2 focus:ring-light-pink outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-gray-blue text-sm mb-1">Average Lap</label>
+                      <input
+                        type="number"
+                        value={runData.avgLap}
+                        onChange={(e) => setRunData({ ...runData, avgLap: e.target.value })}
+                        className="w-full p-3 rounded bg-dark-blue text-white border border-light-pink/20 focus:ring-2 focus:ring-light-pink outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-gray-blue text-sm mb-1">
+                        5-Min Run (e.g., 23:5:04.2)
+                      </label>
+                      <input
+                        type="text"
+                        value={runData.fiveMinuteStint}
+                        onChange={(e) => {
+                          let value = e.target.value.replace(/\D/g, "");
+                          if (value.length > 7) value = value.slice(0, 7);
+                          if (value.length >= 7) {
+                            value = `${value.slice(0, 2)}:${value.slice(2, 3)}:${value.slice(3, 5)}.${value.slice(5, 6)}`;
+                          } else if (value.length >= 6) {
+                            value = `${value.slice(0, 2)}:${value.slice(2, 3)}:${value.slice(3, 5)}.${value.slice(5)}`;
+                          } else if (value.length >= 5) {
+                            value = `${value.slice(0, 2)}:${value.slice(2, 3)}:${value.slice(3, 5)}`;
+                          } else if (value.length >= 3) {
+                            value = `${value.slice(0, 2)}:${value.slice(2)}`;
+                          }
+                          setRunData({ ...runData, fiveMinuteStint: value });
+                        }}
+                        placeholder="23:5:04.2"
+                        className="w-full p-3 rounded bg-dark-blue text-white border border-light-pink/20 focus:ring-2 focus:ring-light-pink outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-gray-blue text-sm mb-1">Tires</label>
+                      <input
+                        type="text"
+                        value={runData.tires}
+                        onChange={(e) => setRunData({ ...runData, tires: e.target.value })}
+                        className="w-full p-3 rounded bg-dark-blue text-white border border-light-pink/20 focus:ring-2 focus:ring-light-pink outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-gray-blue text-sm mb-1">Notes</label>
+                      <textarea
+                        value={runData.notes}
+                        onChange={(e) => setRunData({ ...runData, notes: e.target.value })}
+                        className="w-full p-3 rounded bg-dark-blue text-white border border-light-pink/20 focus:ring-2 focus:ring-light-pink outline-none"
+                        rows={4}
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={runData.favorite}
+                        onChange={(e) => setRunData({ ...runData, favorite: e.target.checked })}
+                        className="text-light-pink focus:ring-light-pink"
+                      />
+                      <label className="text-gray-blue text-sm">Favorite Setup</label>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className="block text-gray-blue text-sm mb-1">Average Lap</label>
-                <input
-                  type="number"
-                  value={runData.avgLap}
-                  onChange={(e) => setRunData({ ...runData, avgLap: e.target.value })}
-                  className="w-full p-3 rounded bg-dark-blue text-white border border-light-pink/20 focus:ring-2 focus:ring-light-pink outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-gray-blue text-sm mb-1">
-                  5-Min Run (e.g., 23:5:04.2)
-                </label>
-                <input
-                  type="text"
-                  value={runData.fiveMinuteStint}
-                  onChange={(e) => {
-                    let value = e.target.value.replace(/\D/g, "");
-                    if (value.length > 7) value = value.slice(0, 7);
-                    if (value.length >= 7) {
-                      value = `${value.slice(0, 2)}:${value.slice(2, 3)}:${value.slice(3, 5)}.${value.slice(5, 6)}`;
-                    } else if (value.length >= 6) {
-                      value = `${value.slice(0, 2)}:${value.slice(2, 3)}:${value.slice(3, 5)}.${value.slice(5)}`;
-                    } else if (value.length >= 5) {
-                      value = `${value.slice(0, 2)}:${value.slice(2, 3)}:${value.slice(3, 5)}`;
-                    } else if (value.length >= 3) {
-                      value = `${value.slice(0, 2)}:${value.slice(2)}`;
-                    }
-                    setRunData({ ...runData, fiveMinuteStint: value });
-                  }}
-                  placeholder="23:5:04.2"
-                  className="w-full p-3 rounded bg-dark-blue text-white border border-light-pink/20 focus:ring-2 focus:ring-light-pink outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-gray-blue text-sm mb-1">Tires</label>
-                <input
-                  type="text"
-                  value={runData.tires}
-                  onChange={(e) => setRunData({ ...runData, tires: e.target.value })}
-                  className="w-full p-3 rounded bg-dark-blue text-white border border-light-pink/20 focus:ring-2 focus:ring-light-pink outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-gray-blue text-sm mb-1">Notes</label>
-                <textarea
-                  value={runData.notes}
-                  onChange={(e) => setRunData({ ...runData, notes: e.target.value })}
-                  className="w-full p-3 rounded bg-dark-blue text-white border border-light-pink/20 focus:ring-2 focus:ring-light-pink outline-none"
-                  rows={4} // Increased from 2 to 4 for a taller textarea
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={runData.favorite}
-                  onChange={(e) => setRunData({ ...runData, favorite: e.target.checked })}
-                  className="text-light-pink focus:ring-light-pink"
-                />
-                <label className="text-gray-blue text-sm">Favorite Setup</label>
+              <div className="mt-4 flex justify-end gap-2">
+                <button onClick={addRun} className="bg-light-pink hover:bg-bright-pink text-dark-blue font-semibold py-2 px-4 rounded transition-colors">
+                  Add Run
+                </button>
+                <button onClick={() => setIsModalOpen(false)} className="bg-deep-blue hover:bg-slate-blue text-white font-semibold py-2 px-4 rounded transition-colors">
+                  Close
+                </button>
               </div>
             </div>
           </div>
-        </div>
-        <div className="mt-4 flex justify-end gap-2">
-          <button onClick={addRun} className="bg-light-pink hover:bg-bright-pink text-dark-blue font-semibold py-2 px-4 rounded transition-colors">
-            Add Run
-          </button>
-          <button onClick={() => setIsModalOpen(false)} className="bg-deep-blue hover:bg-slate-blue text-white font-semibold py-2 px-4 rounded transition-colors">
-            Close
-          </button>
-        </div>
-      </div>
-    </div>
-  )}
+        )}
 
-  {/* New View Runs Modal */}
-  {selectedSession && (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4" style={{ display: selectedSession && !isModalOpen ? 'flex' : 'none' }}>
-      <div className="w-full max-w-2xl bg-dark-blue rounded-lg p-6 max-h-[90vh] overflow-y-auto">
-        <h2 className="text-xl font-bold mb-4">
-          Runs for {selectedSession.name || new Date(selectedSession.date).toLocaleDateString()}
-        </h2>
-        <div className="space-y-4">
-          {selectedSession.runs.length === 0 ? (
-            <p className="text-gray-blue text-center">No runs recorded yet.</p>
-          ) : (
-            selectedSession.runs.map((run, index) => (
-              <div key={index} className="p-3 bg-slate-blue/20 rounded flex flex-col sm:flex-row justify-between items-start gap-2">
-                <div>
-                  <p className="text-gray-blue text-sm">Run {index + 1}</p>
-                  <p className="text-white text-sm">Best Lap: {run.bestLap}s</p>
-                  <p className="text-white text-sm">Avg Lap: {run.avgLap}s</p>
-                  {run.fiveMinuteStint && <p className="text-white text-sm">5-Min Stint: {run.fiveMinuteStint}</p>}
-                  {run.setup && (
-                    <p className="text-white text-sm">
-                      Tires: {run.setup.tires}
-                      {run.setup.favorite && <span className="text-light-pink"> ★</span>}
-                    </p>
-                  )}
-                  {run.notes && <p className="text-gray-blue italic text-sm">Notes: {run.notes}</p>}
-                </div>
-                <div className="flex gap-2 mt-2 sm:mt-0">
-                  {showDeleteRunConfirm === index ? (
-                    <>
-                      <button
-                        onClick={() => deleteRun(index)}
-                        className="text-red-400 hover:text-red-300 text-sm"
-                      >
-                        Yes
-                      </button>
-                      <button
-                        onClick={() => setShowDeleteRunConfirm(null)}
-                        className="text-gray-blue hover:text-white text-sm"
-                      >
-                        No
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      onClick={() => setShowDeleteRunConfirm(index)}
-                      className="text-red-400 hover:text-red-300 text-sm"
-                    >
-                      Delete
-                    </button>
-                  )}
-                </div>
+        {/* View Runs Modal */}
+        {selectedSession && !isModalOpen && (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4">
+            <div className="w-full max-w-2xl bg-dark-blue rounded-lg p-6 max-h-[90vh] overflow-y-auto">
+              <h2 className="text-xl font-bold mb-4">
+                Runs for {selectedSession.name || new Date(selectedSession.date).toLocaleDateString()}
+              </h2>
+              <div className="space-y-4">
+                {selectedSession.runs.length === 0 ? (
+                  <p className="text-gray-blue text-center">No runs recorded yet.</p>
+                ) : (
+                  selectedSession.runs.map((run, index) => (
+                    <div key={index} className="p-3 bg-slate-blue/20 rounded flex flex-col sm:flex-row justify-between items-start gap-2">
+                      <div>
+                        <p className="text-gray-blue text-sm">Run {index + 1}</p>
+                        <p className="text-white text-sm">Best Lap: {run.bestLap}s</p>
+                        <p className="text-white text-sm">Avg Lap: {run.avgLap}s</p>
+                        {run.fiveMinuteStint && <p className="text-white text-sm">5-Min Stint: {run.fiveMinuteStint}</p>}
+                        {run.setup && (
+                          <p className="text-white text-sm">
+                            Tires: {run.setup.tires}
+                            {run.setup.favorite && <span className="text-light-pink"> ★</span>}
+                          </p>
+                        )}
+                        {run.notes && <p className="text-gray-blue italic text-sm">Notes: {run.notes}</p>}
+                      </div>
+                      <div className="flex gap-2 mt-2 sm:mt-0">
+                        {showDeleteRunConfirm === index ? (
+                          <>
+                            <button
+                              onClick={() => deleteRun(index)}
+                              className="text-red-400 hover:text-red-300 text-sm"
+                            >
+                              Yes
+                            </button>
+                            <button
+                              onClick={() => setShowDeleteRunConfirm(null)}
+                              className="text-gray-blue hover:text-white text-sm"
+                            >
+                              No
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            onClick={() => setShowDeleteRunConfirm(index)}
+                            className="text-red-400 hover:text-red-300 text-sm"
+                          >
+                            Delete
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
-            ))
-          )}
-        </div>
-        <div className="mt-4 flex justify-end">
-          <button
-            onClick={() => setSelectedSession(null)}
-            className="bg-deep-blue hover:bg-slate-blue text-white font-semibold py-2 px-4 rounded transition-colors"
-          >
-            Close
-          </button>
-        </div>
-      </div>
-    </div>
-  )}
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  onClick={openAddRunModal}
+                  className="bg-light-pink hover:bg-bright-pink text-dark-blue font-semibold py-2 px-4 rounded transition-colors"
+                >
+                  Add New Run
+                </button>
+                <button
+                  onClick={() => setSelectedSession(null)}
+                  className="bg-deep-blue hover:bg-slate-blue text-white font-semibold py-2 px-4 rounded transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Tutorial Modal */}
         {showTutorial && (
@@ -633,7 +632,7 @@ function App() {
                 <li>Create a track by entering a name and clicking "Add Track".</li>
                 <li>Select a track to view or add sessions.</li>
                 <li>Add a session with a name and weather data will auto-fetch.</li>
-                <li>Click "View Runs" on a session to add or edit run details like lap times and tire setups.</li>
+                <li>Click "View Runs" on a session to see runs, or "Add Run" to log new ones.</li>
                 <li>Use the "Logout" button when you’re done.</li>
               </ul>
               <div className="mt-6 flex justify-end">
