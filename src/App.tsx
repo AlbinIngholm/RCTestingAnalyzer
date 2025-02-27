@@ -155,9 +155,9 @@ function App() {
 
       const position = await new Promise<GeolocationPosition>((resolve, reject) => {
         console.log('fetchWeather: Calling getCurrentPosition');
-        const geoRequest = navigator.geolocation.getCurrentPosition(
+        navigator.geolocation.getCurrentPosition(
           (pos) => {
-            console.log('fetchWeather: Geolocation success:', pos);
+            console.log('fetchWeather: Geolocation success:', pos.coords.latitude, pos.coords.longitude, 'accuracy:', pos.coords.accuracy);
             resolve(pos);
           },
           (error) => {
@@ -172,21 +172,20 @@ function App() {
                 errorMessage = 'Location permission denied. Please allow location access for testinganalyzer.netlify.app in Safari settings.';
                 break;
               case error.POSITION_UNAVAILABLE:
-                errorMessage = 'Location information is unavailable.';
+                errorMessage = 'Location unavailable. Ensure Location Services are enabled and try again.';
                 break;
               case error.TIMEOUT:
-                errorMessage = 'Location request timed out.';
+                errorMessage = 'Location request timed out. Please try again.';
                 break;
             }
             reject(new Error(errorMessage));
           },
           {
-            enableHighAccuracy: false, // Relaxed for broader compatibility
-            timeout: 30000, // 30 seconds timeout
-            maximumAge: 0, // Fresh data only
+            enableHighAccuracy: false,
+            timeout: 60000,
+            maximumAge: 0,
           }
         );
-        console.log('fetchWeather: Geolocation request initiated:', geoRequest);
       });
 
       const { latitude, longitude } = position.coords;
@@ -214,7 +213,7 @@ function App() {
     } catch (error) {
       console.error('fetchWeather: Failed:', error);
       setLocationStatus(error instanceof Error ? error.message : 'Unknown error fetching location.');
-      setShowRetryLocation(true); // Show retry option
+      setShowRetryLocation(true);
       const fallbackLat = 59.9245;
       const fallbackLon = 10.9540;
       console.log(`fetchWeather: Using fallback coordinates: lat=${fallbackLat}, lon=${fallbackLon}`);
@@ -273,7 +272,34 @@ function App() {
   const retryLocation = async () => {
     console.log('retryLocation: Attempting to retry geolocation');
     setShowRetryLocation(false);
-    await createSession(); // Retry the whole process
+    await createSession();
+  };
+
+  const useDefaultWeather = () => {
+    console.log('useDefaultWeather: Proceeding with default weather');
+    if (!user || !selectedTrack) {
+      setLocationStatus('Cannot create session: No track selected');
+      return;
+    }
+    setShowRetryLocation(false);
+    setLocationStatus('Using default weather data');
+    const session: Partial<Session> = {
+      date: new Date().toISOString(),
+      runs: [],
+      weather: { temp: 0, condition: 'Unknown' },
+    };
+    if (sessionName) session.name = sessionName;
+    addDoc(collection(db, `users/${user.uid}/tracks/${selectedTrack.id}/sessions`), session)
+      .then((docRef) => {
+        console.log('useDefaultWeather: Session created with ID:', docRef.id);
+        setSessionName('');
+        setLocationStatus('Session created with default weather');
+      })
+      .catch((error) => {
+        console.error('useDefaultWeather: Error:', error);
+        setLocationStatus('Failed to create session with default weather');
+        alert('Failed to create session with default weather');
+      });
   };
 
   const deleteSession = async (sessionId: string) => {
@@ -443,15 +469,23 @@ function App() {
               </button>
             </div>
             {locationStatus && (
-              <p className={`text-sm mb-4 ${locationStatus.includes('failed') || locationStatus.includes('denied') ? 'text-red-400' : 'text-gray-blue'}`}>
+              <p className={`text-sm mb-4 ${locationStatus.includes('failed') || locationStatus.includes('denied') || locationStatus.includes('unavailable') ? 'text-red-400' : 'text-gray-blue'}`}>
                 {locationStatus}
                 {showRetryLocation && (
-                  <button
-                    onClick={retryLocation}
-                    className="ml-2 text-light-pink hover:text-bright-pink underline"
-                  >
-                    Retry
-                  </button>
+                  <span>
+                    <button
+                      onClick={retryLocation}
+                      className="ml-2 text-light-pink hover:text-bright-pink underline"
+                    >
+                      Retry
+                    </button>
+                    <button
+                      onClick={useDefaultWeather}
+                      className="ml-2 text-light-pink hover:text-bright-pink underline"
+                    >
+                      Use Default
+                    </button>
+                  </span>
                 )}
               </p>
             )}
