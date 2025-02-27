@@ -15,12 +15,10 @@ const firebaseConfig = {
   appId: "1:499372521323:web:48f4dbc2ff06120ae13e2e",
   measurementId: "G-SH9GHKWW9B",
 };
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 const auth = getAuth(app);
 
-// Interfaces (unchanged)
 interface Track {
   id: string;
   name: string;
@@ -46,7 +44,7 @@ interface Session {
 
 function App() {
   const navigate = useNavigate();
-  const [user, setUser] = useState<any>(null); // Firebase User object
+  const [user, setUser] = useState<any>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [trackSearch, setTrackSearch] = useState('');
   const [newTrackName, setNewTrackName] = useState('');
@@ -59,13 +57,15 @@ function App() {
   const [showDeleteTrackConfirm, setShowDeleteTrackConfirm] = useState<string | null>(null);
   const [showDeleteSessionConfirm, setShowDeleteSessionConfirm] = useState<string | null>(null);
   const [showDeleteRunConfirm, setShowDeleteRunConfirm] = useState<number | null>(null);
+  const [showTutorial, setShowTutorial] = useState(false); // Tutorial state
 
-  // Check authentication state
+  // Check auth state and show tutorial on every login
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       if (currentUser) {
         setUser(currentUser);
         console.log('User authenticated:', currentUser.email);
+        setShowTutorial(true); // Show tutorial on every login
       } else {
         setUser(null);
         console.log('No user authenticated, redirecting to login...');
@@ -75,7 +75,6 @@ function App() {
     return () => unsubscribe();
   }, [navigate]);
 
-  // Fetch tracks when authenticated
   useEffect(() => {
     if (!user) return;
 
@@ -93,7 +92,6 @@ function App() {
     return () => unsubscribe();
   }, [user]);
 
-  // Fetch sessions when a track is selected
   useEffect(() => {
     if (!user || !selectedTrack) {
       setSessions([]);
@@ -418,6 +416,7 @@ function App() {
           </>
         )}
 
+        {/* Run Modal */}
         {isModalOpen && selectedSession && (
           <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4">
             <div className="w-full max-w-md bg-dark-blue rounded-lg p-6 max-h-[90vh] overflow-y-auto">
@@ -536,6 +535,31 @@ function App() {
                 </button>
                 <button onClick={() => setIsModalOpen(false)} className="bg-deep-blue hover:bg-slate-blue text-white font-semibold py-2 px-4 rounded transition-colors">
                   Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tutorial Modal */}
+        {showTutorial && (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4">
+            <div className="w-full max-w-md bg-dark-blue rounded-lg p-6 shadow-lg">
+              <h2 className="text-xl font-bold text-white mb-4">Welcome to RC Testing Analyzer!</h2>
+              <p className="text-gray-blue mb-4">Here’s a quick guide to get you started:</p>
+              <ul className="list-disc list-inside text-white space-y-2">
+                <li>Create a track by entering a name and clicking "Add Track".</li>
+                <li>Select a track to view or add sessions.</li>
+                <li>Add a session with a name and weather data will auto-fetch.</li>
+                <li>Click "View Runs" on a session to add or edit run details like lap times and tire setups.</li>
+                <li>Use the "Logout" button when you’re done.</li>
+              </ul>
+              <div className="mt-6 flex justify-end">
+                <button
+                  onClick={() => setShowTutorial(false)}
+                  className="bg-light-pink hover:bg-bright-pink text-dark-blue font-semibold py-2 px-4 rounded transition-colors"
+                >
+                  Got It!
                 </button>
               </div>
             </div>
