@@ -389,6 +389,7 @@ function App() {
       await updateDoc(sessionRef, { runs: updatedRuns });
       console.log('Run added successfully to session:', selectedSession.id);
       setRunData({ bestLap: '', avgLap: '', fiveMinuteStint: '', tires: '', favorite: false, notes: '' });
+      setIsModalOpen(false);
     } catch (error) {
       console.error('Error adding run:', error);
       alert('Failed to add run. Check console for details.');
