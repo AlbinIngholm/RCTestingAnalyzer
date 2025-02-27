@@ -4,6 +4,10 @@
   "private": true,
   "dependencies": {
     "@auth0/auth0-react": "^2.3.0",
+    "@capacitor/android": "^7.0.1",
+    "@capacitor/cli": "^7.0.1",
+    "@capacitor/core": "^7.0.1",
+    "@capacitor/ios": "^7.0.1",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.2.0",
@@ -12,6 +16,7 @@
     "@types/node": "^16.18.126",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
+    "capacitor": "^0.5.6",
     "firebase": "^11.3.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
