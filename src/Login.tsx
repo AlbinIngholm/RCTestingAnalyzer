@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
-import './Login.css'; // Optional: Add if you create a separate CSS file
+import './Login.css';
 
 const auth = getAuth();
 

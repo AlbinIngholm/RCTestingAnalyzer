@@ -147,63 +147,107 @@ function App() {
   const fetchWeather = async (): Promise<{ temp: number; condition: string }> => {
     setLocationStatus('Requesting location...');
     console.log('fetchWeather: Starting geolocation request at', new Date().toISOString());
-
-    try {
-      if (!navigator.geolocation) {
-        throw new Error('Geolocation is not supported by this browser.');
-      }
-
-      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        console.log('fetchWeather: Calling getCurrentPosition');
-        navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            console.log('fetchWeather: Geolocation success:', pos.coords.latitude, pos.coords.longitude, 'accuracy:', pos.coords.accuracy);
-            resolve(pos);
-          },
-          (error) => {
-            console.error('fetchWeather: Geolocation error:', {
-              code: error.code,
-              message: error.message,
-              timestamp: new Date().toISOString(),
-            });
-            let errorMessage = 'Unable to fetch location.';
-            switch (error.code) {
-              case error.PERMISSION_DENIED:
-                errorMessage = 'Location permission denied. Please allow location access for testinganalyzer.netlify.app in Safari settings.';
-                break;
-              case error.POSITION_UNAVAILABLE:
-                errorMessage = 'Location unavailable. Ensure Location Services are enabled and try again.';
-                break;
-              case error.TIMEOUT:
-                errorMessage = 'Location request timed out. Please try again.';
-                break;
+  
+    const fetchLocation = (): Promise<GeolocationPosition> => {
+      return new Promise((resolve, reject) => {
+        if (!navigator.geolocation) {
+          reject(new Error('Geolocation is not supported by this browser.'));
+          return;
+        }
+  
+        let attempts = 0;
+        const maxAttempts = 3;
+        const retryDelay = 2000; // 2 seconds between retries
+  
+        const tryGetPosition = () => {
+          attempts++;
+          console.log(`fetchWeather: Attempt ${attempts} of ${maxAttempts}`);
+          
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              console.log('fetchWeather: Geolocation success:', {
+                lat: pos.coords.latitude,
+                lon: pos.coords.longitude,
+                accuracy: pos.coords.accuracy,
+                timestamp: new Date().toISOString(),
+              });
+              resolve(pos);
+            },
+            (error) => {
+              console.error('fetchWeather: Geolocation error:', {
+                code: error.code,
+                message: error.message,
+                attempt: attempts,
+                timestamp: new Date().toISOString(),
+              });
+  
+              let errorMessage = 'Unable to fetch location.';
+              switch (error.code) {
+                case error.PERMISSION_DENIED:
+                  errorMessage = 'Location permission denied. Please enable location access for this site in your browser settings.';
+                  break;
+                case error.POSITION_UNAVAILABLE:
+                  errorMessage = 'Location unavailable. Ensure Location Services are enabled.';
+                  break;
+                case error.TIMEOUT:
+                  errorMessage = 'Location request timed out.';
+                  break;
+              }
+  
+              if (attempts < maxAttempts && error.code !== error.PERMISSION_DENIED) {
+                console.log(`fetchWeather: Retrying in ${retryDelay}ms...`);
+                setTimeout(tryGetPosition, retryDelay);
+              } else {
+                reject(new Error(errorMessage));
+              }
+            },
+            {
+              enableHighAccuracy: false, // Lower accuracy might work better on some devices
+              timeout: 10000, // 10 seconds timeout per attempt
+              maximumAge: 0, // No cached position
             }
-            reject(new Error(errorMessage));
-          },
-          {
-            enableHighAccuracy: false,
-            timeout: 60000,
-            maximumAge: 0,
-          }
-        );
+          );
+        };
+  
+        // Check permission status first
+        if (navigator.permissions) {
+          navigator.permissions.query({ name: 'geolocation' }).then((result) => {
+            console.log('fetchWeather: Permission status:', result.state);
+            if (result.state === 'denied') {
+              reject(new Error('Location permission denied. Please enable it in your browser settings.'));
+            } else {
+              tryGetPosition();
+            }
+          }).catch((err) => {
+            console.error('fetchWeather: Permission check failed:', err);
+            tryGetPosition(); // Proceed anyway
+          });
+        } else {
+          tryGetPosition(); // Older browsers without permissions API
+        }
       });
-
+    };
+  
+    try {
+      const position = await fetchLocation();
       const { latitude, longitude } = position.coords;
-      console.log(`fetchWeather: Geolocation fetched: lat=${latitude}, lon=${longitude}`);
-      setLocationStatus(`Location fetched: ${latitude}, ${longitude}`);
-
+      console.log(`fetchWeather: Location fetched: lat=${latitude}, lon=${longitude}`);
+      setLocationStatus(`Location fetched: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
+  
       console.log('fetchWeather: Fetching weather data from api.met.no');
       const response = await fetch(
         `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${latitude}&lon=${longitude}`,
         { headers: { 'User-Agent': 'RC-Testing-Analyzer/1.0 (your-email@example.com)' } }
       );
+  
       if (!response.ok) {
         console.error('fetchWeather: Weather API failed:', response.status, response.statusText);
         throw new Error(`Weather API failed with status: ${response.status}`);
       }
+  
       const data = await response.json();
       console.log('fetchWeather: Weather API response:', data);
-
+  
       const current = data.properties.timeseries[0].data.instant.details;
       const temp = current.air_temperature;
       const conditionSymbol = data.properties.timeseries[0].data.next_1_hours?.summary.symbol_code || 'unknown';
@@ -214,17 +258,22 @@ function App() {
       console.error('fetchWeather: Failed:', error);
       setLocationStatus(error instanceof Error ? error.message : 'Unknown error fetching location.');
       setShowRetryLocation(true);
-      const fallbackLat = 59.9245;
+  
+      // Fallback to default coordinates
+      const fallbackLat = 59.9245; // Lørenskog, Norway
       const fallbackLon = 10.9540;
       console.log(`fetchWeather: Using fallback coordinates: lat=${fallbackLat}, lon=${fallbackLon}`);
+  
       try {
         const response = await fetch(
           `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${fallbackLat}&lon=${fallbackLon}`,
           { headers: { 'User-Agent': 'RC-Testing-Analyzer/1.0 (your-email@example.com)' } }
         );
+  
         if (!response.ok) {
           throw new Error(`Fallback Weather API failed with status: ${response.status}`);
         }
+  
         const data = await response.json();
         const current = data.properties.timeseries[0].data.instant.details;
         const temp = current.air_temperature;
