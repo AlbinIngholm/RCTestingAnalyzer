@@ -36,42 +36,22 @@ cd RCTestingAnalyzer
 npm install
 ```
 
-### 3. Configure Firebase
-1. Go to the Firebase Console.
-2. Create a new project and enable Authentication (Email/Password) and Firestore.
-3. Copy your Firebase config object from the project settings.
-4. Create a `src/firebase.ts` file with the following:
-
-```typescript
-import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
-
-const firebaseConfig = {
-  apiKey: "your-api-key",
-  authDomain: "your-auth-domain",
-  projectId: "your-project-id",
-  storageBucket: "your-storage-bucket",
-  messagingSenderId: "your-messaging-sender-id",
-  appId: "your-app-id"
-};
-
-const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
-export const db = getFirestore(app);
-```
-Replace the placeholders with your Firebase config values.
-
-### 4. Configure OpenWeatherMap API
-1. Sign up at OpenWeatherMap and get an API key.
-2. Create a `.env` file in the root directory:
+### 3. Configure Environment Variables
+Create a `.env` file in the root directory and add the following:
 
 ```plaintext
-REACT_APP_OPENWEATHERMAP_API_KEY=your-api-key-here
+REACT_APP_OPENWEATHERMAP_API_KEY=
+REACT_APP_FIREBASE_API_KEY=
+REACT_APP_FIREBASE_AUTH_DOMAIN=
+REACT_APP_FIREBASE_PROJECT_ID=
+REACT_APP_FIREBASE_STORAGE_BUCKET=
+REACT_APP_FIREBASE_MESSAGING_SENDER_ID=
+REACT_APP_FIREBASE_APP_ID=
+REACT_APP_FIREBASE_MEASUREMENT_ID=
 ```
-Ensure `.env` is listed in `.gitignore` to keep your key private.
+Ensure `.env` is listed in `.gitignore` to keep your credentials private.
 
-### 5. Run the Application
+### 4. Run the Application
 ```bash
 npm start
 ```
@@ -102,7 +82,7 @@ RCTestingAnalyzer/
 ## Troubleshooting
 - **401 Unauthorized (OpenWeatherMap)**: Ensure your API key is valid and activated. Check `.env` and restart the server.
 - **Geolocation Errors**: Allow location access in your browser or use the "Use Default" option for fallback weather.
-- **Firebase Issues**: Verify your `firebase.ts` config matches your Firebase project settings.
+- **Firebase Issues**: Verify your `.env` configuration matches your Firebase project settings.
 
 ## Deployment
 To deploy (e.g., to Netlify or Vercel):
@@ -112,7 +92,7 @@ To deploy (e.g., to Netlify or Vercel):
 npm run build
 ```
 2. Deploy the `build/` directory.
-3. Set the `REACT_APP_OPENWEATHERMAP_API_KEY` environment variable in your hosting platform’s settings.
+3. Set the necessary environment variables in your hosting platform’s settings.
 
 ## Contributing
 Feel free to submit issues or pull requests to improve the project. Ensure you follow the existing code style and include tests where applicable.
@@ -142,4 +122,4 @@ from, out of, or in connection with the Software.
 By using this software, you agree to the above terms.
 
 ## Contact
-For questions, reach out to `albin.ingholm@gmail.com`. 
+For questions, reach out to `albin.ingholm@gmail.com`.
