@@ -47,6 +47,9 @@ function App() {
   const [locationStatus, setLocationStatus] = useState<string>('');
   const [showRetryLocation, setShowRetryLocation] = useState(false);
 
+  // Replace with your OpenWeatherMap API key
+  const OPENWEATHERMAP_API_KEY = process.env.REACT_APP_OPENWEATHERMAP_API_KEY || 'default_key_if_missing';
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       if (currentUser) {
@@ -147,22 +150,22 @@ function App() {
   const fetchWeather = async (): Promise<{ temp: number; condition: string }> => {
     setLocationStatus('Requesting location...');
     console.log('fetchWeather: Starting geolocation request at', new Date().toISOString());
-  
+
     const fetchLocation = (): Promise<GeolocationPosition> => {
       return new Promise((resolve, reject) => {
         if (!navigator.geolocation) {
           reject(new Error('Geolocation is not supported by this browser.'));
           return;
         }
-  
+
         let attempts = 0;
         const maxAttempts = 3;
         const retryDelay = 2000; // 2 seconds between retries
-  
+
         const tryGetPosition = () => {
           attempts++;
           console.log(`fetchWeather: Attempt ${attempts} of ${maxAttempts}`);
-          
+
           navigator.geolocation.getCurrentPosition(
             (pos) => {
               console.log('fetchWeather: Geolocation success:', {
@@ -180,7 +183,7 @@ function App() {
                 attempt: attempts,
                 timestamp: new Date().toISOString(),
               });
-  
+
               let errorMessage = 'Unable to fetch location.';
               switch (error.code) {
                 case error.PERMISSION_DENIED:
@@ -193,7 +196,7 @@ function App() {
                   errorMessage = 'Location request timed out.';
                   break;
               }
-  
+
               if (attempts < maxAttempts && error.code !== error.PERMISSION_DENIED) {
                 console.log(`fetchWeather: Retrying in ${retryDelay}ms...`);
                 setTimeout(tryGetPosition, retryDelay);
@@ -202,14 +205,13 @@ function App() {
               }
             },
             {
-              enableHighAccuracy: false, // Lower accuracy might work better on some devices
-              timeout: 10000, // 10 seconds timeout per attempt
-              maximumAge: 0, // No cached position
+              enableHighAccuracy: false,
+              timeout: 10000,
+              maximumAge: 0,
             }
           );
         };
-  
-        // Check permission status first
+
         if (navigator.permissions) {
           navigator.permissions.query({ name: 'geolocation' }).then((result) => {
             console.log('fetchWeather: Permission status:', result.state);
@@ -220,65 +222,59 @@ function App() {
             }
           }).catch((err) => {
             console.error('fetchWeather: Permission check failed:', err);
-            tryGetPosition(); // Proceed anyway
+            tryGetPosition();
           });
         } else {
-          tryGetPosition(); // Older browsers without permissions API
+          tryGetPosition();
         }
       });
     };
-  
+
     try {
       const position = await fetchLocation();
       const { latitude, longitude } = position.coords;
       console.log(`fetchWeather: Location fetched: lat=${latitude}, lon=${longitude}`);
       setLocationStatus(`Location fetched: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
-  
-      console.log('fetchWeather: Fetching weather data from api.met.no');
+
+      console.log('fetchWeather: Fetching weather data from OpenWeatherMap');
       const response = await fetch(
-        `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${latitude}&lon=${longitude}`,
-        { headers: { 'User-Agent': 'RC-Testing-Analyzer/1.0 (your-email@example.com)' } }
+        `https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&appid=${OPENWEATHERMAP_API_KEY}&units=metric`
       );
-  
+
       if (!response.ok) {
         console.error('fetchWeather: Weather API failed:', response.status, response.statusText);
         throw new Error(`Weather API failed with status: ${response.status}`);
       }
-  
+
       const data = await response.json();
       console.log('fetchWeather: Weather API response:', data);
-  
-      const current = data.properties.timeseries[0].data.instant.details;
-      const temp = current.air_temperature;
-      const conditionSymbol = data.properties.timeseries[0].data.next_1_hours?.summary.symbol_code || 'unknown';
-      const condition = conditionSymbol.split('_')[0];
+
+      const temp = data.main.temp; // Temperature in Celsius (metric units)
+      const condition = data.weather[0].main; // Main weather condition (e.g., "Clouds", "Rain")
       setLocationStatus('Weather data retrieved successfully');
       return { temp, condition };
     } catch (error) {
       console.error('fetchWeather: Failed:', error);
       setLocationStatus(error instanceof Error ? error.message : 'Unknown error fetching location.');
       setShowRetryLocation(true);
-  
-      // Fallback to default coordinates
-      const fallbackLat = 59.9245; // Lørenskog, Norway
+
+      // Fallback to default coordinates (Lørenskog, Norway)
+      const fallbackLat = 59.9245;
       const fallbackLon = 10.9540;
       console.log(`fetchWeather: Using fallback coordinates: lat=${fallbackLat}, lon=${fallbackLon}`);
-  
+
       try {
         const response = await fetch(
-          `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${fallbackLat}&lon=${fallbackLon}`,
-          { headers: { 'User-Agent': 'RC-Testing-Analyzer/1.0 (your-email@example.com)' } }
+          `https://api.openweathermap.org/data/2.5/weather?lat=${fallbackLat}&lon=${fallbackLon}&appid=${OPENWEATHERMAP_API_KEY}&units=metric`
         );
-  
+
         if (!response.ok) {
           throw new Error(`Fallback Weather API failed with status: ${response.status}`);
         }
-  
+
         const data = await response.json();
-        const current = data.properties.timeseries[0].data.instant.details;
-        const temp = current.air_temperature;
-        const conditionSymbol = data.properties.timeseries[0].data.next_1_hours?.summary.symbol_code || 'unknown';
-        const condition = conditionSymbol.split('_')[0];
+        const temp = data.main.temp;
+        const condition = data.weather[0].main;
         setLocationStatus('Using fallback weather data (Lørenskog)');
         return { temp, condition };
       } catch (fallbackError) {
@@ -329,7 +325,7 @@ function App() {
     if (!user || !selectedTrack) {
       setLocationStatus('Cannot create session: No track selected');
       return;
-    }
+    } 
     setShowRetryLocation(false);
     setLocationStatus('Using default weather data');
     const session: Partial<Session> = {
