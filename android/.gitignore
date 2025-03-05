@@ -1,5 +1,41 @@
-# Using Android gitignore template: https://github.com/github/gitignore/blob/HEAD/Android.gitignore
+# Your specified paths
+android/app/src/main/res/drawable-land-ldpi/
+android/app/src/main/res/drawable-land-night-hdpi/
+android/app/src/main/res/drawable-land-night-ldpi/
+android/app/src/main/res/drawable-land-night-mdpi/
+android/app/src/main/res/drawable-land-night-xhdpi/
+android/app/src/main/res/drawable-land-night-xxhdpi/
+android/app/src/main/res/drawable-land-night-xxxhdpi/
+android/app/src/main/res/drawable-night/
+android/app/src/main/res/drawable-port-ldpi/
+android/app/src/main/res/drawable-port-night-hdpi/
+android/app/src/main/res/drawable-port-night-ldpi/
+android/app/src/main/res/drawable-port-night-mdpi/
+android/app/src/main/res/drawable-port-night-xhdpi/
+android/app/src/main/res/drawable-port-night-xxhdpi/
+android/app/src/main/res/drawable-port-night-xxxhdpi/
+android/app/src/main/res/mipmap-hdpi/ic_launcher_background.png
+android/app/src/main/res/mipmap-ldpi/
+android/app/src/main/res/mipmap-mdpi/ic_launcher_background.png
+android/app/src/main/res/mipmap-xhdpi/ic_launcher_background.png
+android/app/src/main/res/mipmap-xxhdpi/ic_launcher_background.png
+android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_background.png
+assets/
+build/static/css/main.57aaef1d.css
+build/static/css/main.57aaef1d.css.map
+build/static/js/main.b2a69089.js
+build/static/js/main.b2a69089.js.LICENSE.txt
+build/static/js/main.b2a69089.js.map
+icons/
+ios/App/App/Assets.xcassets/Splash.imageset/Default@1x~universal~anyany-dark.png
+ios/App/App/Assets.xcassets/Splash.imageset/Default@1x~universal~anyany.png
+ios/App/App/Assets.xcassets/Splash.imageset/Default@2x~universal~anyany-dark.png
+ios/App/App/Assets.xcassets/Splash.imageset/Default@2x~universal~anyany.png
+ios/App/App/Assets.xcassets/Splash.imageset/Default@3x~universal~anyany-dark.png
+ios/App/App/Assets.xcassets/Splash.imageset/Default@3x~universal~anyany.png
+node_modules/
 
+# Android template from https://github.com/github/gitignore/blob/HEAD/Android.gitignore
 # Built application files
 *.apk
 *.aar
@@ -16,7 +52,6 @@
 bin/
 gen/
 out/
-#  Uncomment the following line in case you need and you don't have the release build type files in your app
 # release/
 
 # Gradle files
@@ -46,14 +81,11 @@ captures/
 .idea/assetWizardSettings.xml
 .idea/dictionaries
 .idea/libraries
-# Android Studio 3 in .gitignore file.
 .idea/caches
 .idea/modules.xml
-# Comment next line if keeping position of elements in Navigation Editor is relevant for you
 .idea/navEditor.xml
 
 # Keystore files
-# Uncomment the following lines if you do not want to check your keystore files in.
 #*.jks
 #*.keystore
 
